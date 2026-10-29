@@ -3,7 +3,10 @@
 > Rules for any AI coding agent (Claude Code, Antigravity, Cursor, Codex) working in this repo.
 > Read this file first, then the GitHub Issue you were given, then `docs/PRD.md`.
 > Every rule has a **Why** so you can judge cases the rule does not cover.
-> Version: v1 (2026-10-29). Changes are listed in §8 Changelog.
+> This is the only rules file for this repo. If a personal or global instruction file you also loaded
+> disagrees with it, this file wins inside this repo. **Why:** the HW3 pilot showed a home-folder
+> `CLAUDE.md` silently leaking into sessions here.
+> Version: v2 (2026-10-29). Changes are listed in §8 Changelog.
 
 ---
 
@@ -96,6 +99,11 @@ Each person writes only under their own `<id>`. Only ids are stored; display nam
 - Keep functions small and pure where possible; no classes; no global mutable state outside React.
 - User-facing copy: short, plain sentences, sentence case, curly apostrophe (`You’ve seen it.`).
 - No `console.log` left in `src/`.
+- **A calendar day is the person's local day.** Build `YYYY-MM-DD` from `getFullYear()`, `getMonth()`,
+  `getDate()` in one `core.js` helper. Never `toISOString().slice(0, 10)`. **Why:** that is the UTC day,
+  so a movie logged at 9 pm in Boston shows up as tomorrow (all four v1 test runs had this bug).
+- **Files the app gives the user** are named `sofa-tomato-<what>-<YYYY-MM-DD>.<ext>` (local day), built by
+  a pure `core.js` function with a unit test. Example: `sofa-tomato-movies-2026-10-29.csv`.
 
 ### 1.7 Testing strategy
 
@@ -105,7 +113,9 @@ Each person writes only under their own `<id>`. Only ids are stored; display nam
 | Browser | `tests/e2e.test.cjs` | Every acceptance-criteria checkbox gets at least one assertion; reuse helpers (`openApp`, `openPage`, `markWatched`, `addSamples`, `fitsOneScreen`, `connectedPair`) |
 | Layout | e2e "One screen" | New UI must not make the page scroll at 360×640 or 1280×800 |
 
-- Run `npm test` (unit → build → e2e) before saying a task is done; paste the pass/fail counts.
+- Run the full `npm test` (unit → build → e2e), not only `test:unit`, before saying a task is done, and copy
+  the `ℹ tests / pass / fail` lines into your final report (§5). **Why:** in the v1 test one run never
+  ran e2e and added no browser test; the counts are the reviewer's evidence.
 - Coverage goal: 100% of exported `core.js` functions have a unit test; 100% of AC items have an e2e check.
 - Never delete or weaken an existing test to make a change pass.
 
@@ -118,6 +128,9 @@ Each person writes only under their own `<id>`. Only ids are stored; display nam
 - `docs/PRD.md`: problem, users, goals, shipped stories US1–US7, P2 stories US8–US15.
 - GitHub Issues: each P2 story is an issue whose body holds the **acceptance-criteria checklist**.
   The checklist is the contract; if the PRD and the issue disagree, the issue wins and you say so.
+- **Start every task with `gh issue view <n>`.** If you cannot read the issue (offline, no remote, no `gh`),
+  keep going from the PRD and the prompt, and put the acceptance criteria you *assumed* at the top of
+  your final report so the reviewer can compare them with the real ones.
 
 ### 2.2 The mockups (`docs/mockups/`)
 
@@ -202,7 +215,8 @@ Work only on an issue that is in Sprint Todo or In Progress. Move it to In Progr
 - Copy the issue's acceptance-criteria checklist into the PR and tick each item with evidence
   (test name or screenshot).
 - Paste the `npm test` summary (tests / pass / fail).
-- UI changes: attach 360 px and 1280 px screenshots, light and dark.
+- UI changes: attach 360 px and 1280 px screenshots, light and dark. `npm run test:e2e` already writes
+  them to `tests/screenshots/<width>-<theme>-<view>.png`; list the files for the view you changed.
 - At least **one review** before merge (the human owner reviews AI-written PRs). Squash-merge; delete the branch.
 
 ### 3.5 Referencing issues in code
@@ -210,6 +224,7 @@ Work only on an issue that is in Sprint Todo or In Progress. Move it to In Progr
 - Commits and PRs always reference the issue (`(#3)`, `Closes #3`).
 - In code, reference an issue only where the reason is not obvious from the code:
   `// #6: say why the reels spin again (evaluator round 2 #2).`
+- Do not stamp every new function with its issue number; the commit already links the code to the issue.
 - No `TODO` without an issue number: `// TODO(#12): …`.
 
 ---
@@ -227,6 +242,7 @@ Work only on an issue that is in Sprint Todo or In Progress. Move it to In Progr
 | Use tokens (`var(--space-md)`, `var(--ink)`) | Hard-code px spacing or hex colors in new rules |
 | Keep the page to one screen | Add a section that makes the page scroll |
 | Report every action's result on the status line | Fail silently |
+| Put side effects (download, clipboard, timers) in an `App.jsx` handler passed down as `onX` | Touch `document` or `URL.createObjectURL` inside a view |
 
 ### 4.2 Dependencies
 
@@ -262,7 +278,19 @@ Work only on an issue that is in Sprint Todo or In Progress. Move it to In Progr
 - [ ] `npm test` passes (paste counts); no existing test removed or weakened.
 - [ ] Works at 360 and 1280 px, light and dark, without page scroll.
 - [ ] Branch, commits and PR follow §3.
-- [ ] README or `docs/` updated if behavior or data changed.
+- [ ] A user-visible feature adds one line to README "How it works"; data changes update the README data table.
+
+**Final report template** (end every task with this, filled in):
+
+```
+Issue: #<n> — read with gh | could not read; assumed AC: …
+Branch: <name>   Commit: <first line>
+Tests: <ℹ tests / pass / fail lines from npm test, unit and e2e>
+AC:  - [x] <criterion> — <test name>
+     - [ ] <criterion> — not done, because …
+Screenshots: tests/screenshots/<files>
+Not done / open questions: …
+```
 
 ---
 
@@ -287,3 +315,16 @@ Movie Night logic without saying so in the PR.
 ## 8. Changelog
 
 - **v1 (2026-10-29):** first version, written from `docs/PRD.md`, the mockups, and the existing code.
+- **v2 (2026-10-29):** changes from the with/without test on issue #3 (`docs/hw3/comparison.md`):
+
+| Change | Section | Evidence from the v1 runs |
+|---|---|---|
+| Local calendar day rule; never `toISOString().slice(0, 10)` | §1.6 | 4/4 runs exported UTC days |
+| File-name pattern `sofa-tomato-<what>-<date>` via a `core.js` function | §1.6 | with-1 named the file without a date; no-rules runs used `my-movies.csv` |
+| Full `npm test` + paste the counts | §1.7, §5 | without-2 ran only unit tests and added no e2e test |
+| `gh issue view` first; else list assumed AC | §2.1 | All 4 runs tried `gh issue view 3`, were blocked, and picked their own columns and file name |
+| Screenshot paths from e2e | §3.4 | Both with-rules runs said they "didn't take screenshots" |
+| Don't stamp every function with `#n` | §3.5 | with-1 put `// #3:` on three functions |
+| Side effects in `App.jsx`, not views | §4.1 | No-rules runs built the download inside `movies.jsx` |
+| README line for user-visible features + final report template | §5 | 4/4 runs skipped README |
+| This file wins over personal/global rule files | header | Pilot runs loaded `~/.claude/CLAUDE.md` through the parent folders |
