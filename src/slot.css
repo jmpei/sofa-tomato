@@ -1,0 +1,102 @@
+/* ---------- Slot machine: Claude pulls the lever, three reels spin ---------- */
+
+.slot { width: min(100%, 560px); display: grid; }
+.slot-top { display: flex; align-items: flex-end; gap: var(--space-sm); padding: 0 var(--space-md); }
+.mascot { width: 72px; height: auto; flex: none; margin-bottom: -2px; animation: bob 2.4s ease-in-out infinite; }
+.mascot-body { fill: var(--claude); }
+.mascot-eye { fill: var(--black); }
+.mascot-pull { animation: tug 550ms ease-in-out 3; }
+.mascot-cheer { animation: hop 450ms ease-in-out 4; }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes tug { 0%, 100% { transform: none; } 50% { transform: translateX(8px) rotate(8deg); } }
+@keyframes hop { 0%, 100% { transform: none; } 50% { transform: translateY(-14px); } }
+
+.slot-marquee {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--rounded-md) var(--rounded-md) 0 0;
+  background: var(--black);
+  color: var(--white);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.slot-match .slot-marquee span { color: var(--block-lime); animation: blink 500ms steps(2) 6; }
+@keyframes blink { 50% { opacity: 0.25; } }
+
+.slot-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-radius: var(--rounded-lg);
+  background: var(--black);
+}
+.slot-window { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-xs); }
+.reel { position: relative; height: 104px; overflow: hidden; border-radius: 12px; background: var(--white); color: var(--black); }
+.slot-match:not(.slot-spinning) .reel { box-shadow: inset 0 0 0 3px var(--magenta); }
+.reel-strip { margin: 0; padding: 0; list-style: none; }
+.reel-cell {
+  height: 104px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xs);
+  text-align: center;
+  font-size: 15px;
+  font-weight: 540;
+  line-height: 1.2;
+  overflow-wrap: normal;
+  hyphens: auto;
+}
+.reel-cell span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.reel-wait { font-size: 44px; font-weight: 340; }
+.reel-spin { animation-name: reel; animation-timing-function: cubic-bezier(0.15, 0.8, 0.25, 1); animation-fill-mode: both; }
+@keyframes reel { from { transform: translateY(0); } to { transform: translateY(calc(var(--steps) * -104px)); } }
+
+/* The lever: the knob slides down the stick and springs back. */
+.lever { position: relative; width: 24px; height: 104px; flex: none; }
+.lever-stick {
+  position: absolute;
+  left: 9px;
+  bottom: 6px;
+  width: 6px;
+  height: 80px;
+  border-radius: 3px;
+  background: var(--lever);
+  transform-origin: 50% 100%;
+}
+.lever-knob {
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  top: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--rounded-full);
+  background: var(--magenta);
+}
+.lever-pulled .lever-knob { animation: knob 700ms ease-in-out; }
+.lever-pulled .lever-stick { animation: stick 700ms ease-in-out; }
+@keyframes knob { 45% { transform: translateY(64px); } }
+@keyframes stick { 45% { transform: scaleY(0.2); } }
+
+@media (max-width: 560px) {
+  .mascot { width: 56px; }
+  .slot-body { padding: var(--space-sm); gap: var(--space-xs); }
+  .reel, .reel-cell { height: 88px; }
+  .reel-cell { font-size: 13px; padding: 6px; }
+  @keyframes reel { from { transform: translateY(0); } to { transform: translateY(calc(var(--steps) * -88px)); } }
+  .lever { height: 88px; width: 20px; }
+  .lever-knob { width: 20px; height: 20px; }
+  .lever-stick { left: 7px; height: 66px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot, .mascot-pull, .mascot-cheer, .slot-match .slot-marquee span,
+  .lever-pulled .lever-knob, .lever-pulled .lever-stick { animation: none; }
+}

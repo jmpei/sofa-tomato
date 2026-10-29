@@ -1,0 +1,18 @@
+{
+  "name": "reellog-together",
+  "private": true,
+  "type": "module",
+  "description": "ReelLog Together: a movie log you share with the people you watch with, plus a Movie Night picker. Built as a Claude web artifact.",
+  "scripts": {
+    "build": "node scripts/build.cjs",
+    "test:unit": "node --test tests/core.test.js tests/localdb.test.js",
+    "test:e2e": "node scripts/build.cjs && node scripts/build-test-vendor.cjs && node --test --test-concurrency=1 tests/e2e.test.cjs",
+    "test": "npm run test:unit && npm run test:e2e"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "playwright": "^1.56.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}
