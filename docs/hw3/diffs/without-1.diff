@@ -1,0 +1,177 @@
+diff --git a/src/core.js b/src/core.js
+index 8e739b8..4cbbcbe 100644
+--- a/src/core.js
++++ b/src/core.js
+@@ -589,6 +589,47 @@ export function newSamples(movies, samples = SAMPLE_MOVIES, { now = Date.now(),
+   return added;
+ }
+ 
++// ---------- CSV export ----------
++
++export const CSV_COLUMNS = [
++  "Title", "Status", "Loved", "Tags", "Year", "Runtime (min)", "Certificate",
++  "Director", "Stars", "Plot", "Added", "Watched", "Watched with",
++];
++
++// One CSV field. Quotes when needed, and prefixes an apostrophe to text a
++// spreadsheet would run as a formula (=, +, -, @).
++export function csvField(value) {
++  let text = value == null ? "" : String(value);
++  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
++  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
++}
++
++const isoDate = (timestamp) => (Number.isFinite(timestamp) ? new Date(timestamp).toISOString().slice(0, 10) : "");
++
++// Every movie, watched and watchlist, as CSV text (CRLF rows, header first).
++// nameOf turns a "watched with" id into a name.
++export function moviesToCsv(movies, nameOf = (id) => id) {
++  const rows = sortNewestFirst(movies).map((m) => {
++    const info = m.info?.found ? m.info : null;
++    return [
++      m.title,
++      m.status,
++      m.loved ? "yes" : "no",
++      m.tags.join("; "),
++      info?.year ?? "",
++      info?.runtimeMinutes ?? "",
++      info?.certificate ?? "",
++      info?.director.join("; ") ?? "",
++      info?.stars.join("; ") ?? "",
++      info?.plot ?? "",
++      isoDate(m.createdAt),
++      m.status === "watched" ? isoDate(m.watchedAt ?? m.createdAt) : "",
++      m.watchedWith.map((w) => nameOf(w.with)).join("; "),
++    ];
++  });
++  return [CSV_COLUMNS, ...rows].map((row) => row.map(csvField).join(",")).join("\r\n") + "\r\n";
++}
++
+ // ---------- Display ----------
+ 
+ export function formatDate(timestamp, now = Date.now(), locale) {
+diff --git a/src/movies.jsx b/src/movies.jsx
+index 1520c64..02f8994 100644
+--- a/src/movies.jsx
++++ b/src/movies.jsx
+@@ -3,7 +3,7 @@
+ // tags, plot, director and stars. "More" opens IMDb.
+ import {
+   searchMovies, filterMovies, findByTitle, watchedWithCounts, infoLine, imdbUrl,
+-  formatDate, hasTag, cleanTitle, WARN_TAG,
++  formatDate, hasTag, cleanTitle, moviesToCsv, WARN_TAG,
+ } from "./core.js";
+ import { TagChoices } from "./tags.jsx";
+ 
+@@ -141,6 +141,19 @@ export function EditSheet({ movie, library, onSave, onDelete, onClose }) {
+   );
+ }
+ 
++// Saves all movies as a CSV file through a temporary download link.
++function downloadCsv(movies, nameOf) {
++  const blob = new Blob(["﻿", moviesToCsv(movies, nameOf)], { type: "text/csv;charset=utf-8" });
++  const url = URL.createObjectURL(blob);
++  const link = document.createElement("a");
++  link.href = url;
++  link.download = "my-movies.csv";
++  document.body.appendChild(link);
++  link.click();
++  link.remove();
++  URL.revokeObjectURL(url);
++}
++
+ export function MoviesView({ movies, loaded, library, nameOf, lookingUp, canLookUp, onLookUp, onEdit, onWatchedIt, onAddSamples, status }) {
+   const [tab, setTab] = useState("watched");
+   const [query, setQuery] = useState("");
+@@ -224,6 +237,11 @@ export function MoviesView({ movies, loaded, library, nameOf, lookingUp, canLook
+               </select>
+             </div>
+           )}
++          {movies.length > 0 && (
++            <button type="button" className="btn btn-secondary btn-compact" onClick={() => downloadCsv(movies, nameOf)}>
++              Export CSV
++            </button>
++          )}
+         </div>
+ 
+         <p className="search-answer" aria-live="polite">{answer || status}</p>
+diff --git a/tests/core.test.js b/tests/core.test.js
+index 9011e5f..cb05846 100644
+--- a/tests/core.test.js
++++ b/tests/core.test.js
+@@ -9,7 +9,7 @@ import {
+   createMovie, markWatched, readMovie, movieBody, findByTitle, searchMovies, filterMovies,
+   watchedWithCounts, recordWatched, connection, readLink, CLAUDE_ID, NIGHT_EXPIRES_MS,
+   readSide, emptySide, claudeSide, seededRandom, nightPool, sharedWatchlist, pickFrom, deriveNight,
+-  newSamples, SAMPLE_MOVIES,
++  newSamples, SAMPLE_MOVIES, csvField, moviesToCsv, CSV_COLUMNS,
+ } from "../src/core.js";
+ 
+ let counter = 0;
+@@ -400,3 +400,38 @@ describe("Movie Night", () => {
+     assert.equal(shared.length, 1);
+   });
+ });
++
++describe("CSV export", () => {
++  test("csvField quotes commas, quotes and newlines", () => {
++    assert.equal(csvField("plain"), "plain");
++    assert.equal(csvField("a,b"), '"a,b"');
++    assert.equal(csvField('say "hi"'), '"say ""hi"""');
++    assert.equal(csvField("two\nlines"), '"two\nlines"');
++    assert.equal(csvField(null), "");
++  });
++
++  test("csvField defuses spreadsheet formulas", () => {
++    assert.equal(csvField("=SUM(A1)"), "'=SUM(A1)");
++    assert.equal(csvField("@cmd"), "'@cmd");
++  });
++
++  test("an empty list is just the header", () => {
++    assert.equal(moviesToCsv([]), CSV_COLUMNS.join(",") + "\r\n");
++  });
++
++  test("exports watched and watchlist movies, with details and who it was watched with", () => {
++    const seen = watched("Dune, Part Two", ["WTF", "Sci-fi"], {
++      now: Date.UTC(2024, 2, 5),
++      loved: true,
++      info: readInfo({ year: 2024, runtimeMinutes: 166, certificate: "PG-13", plot: 'A "big" one', director: ["Denis Villeneuve"], stars: ["A", "B"] }),
++    });
++    seen.watchedWith = [{ with: "u1", at: 1 }];
++    const saved = later("Alien", Date.UTC(2024, 0, 1));
++    const lines = moviesToCsv([saved, seen], (id) => ({ u1: "Sam" })[id]).split("\r\n");
++    assert.equal(lines.length, 4);
++    assert.equal(lines[0], CSV_COLUMNS.join(","));
++    assert.equal(lines[1], '"Dune, Part Two",watched,yes,WTF; Sci-fi,2024,166,PG-13,Denis Villeneuve,A; B,"A ""big"" one",2024-03-05,2024-03-05,Sam');
++    assert.equal(lines[2], "Alien,watchlist,no,,,,,,,,2024-01-01,,");
++    assert.equal(lines[3], "");
++  });
++});
+diff --git a/tests/e2e.test.cjs b/tests/e2e.test.cjs
+index b830b5a..a2f5528 100644
+--- a/tests/e2e.test.cjs
++++ b/tests/e2e.test.cjs
+@@ -353,6 +353,23 @@ describe("Movies", () => {
+     await context.close();
+   });
+ 
++  test("Export CSV downloads watched and watchlist movies", async () => {
++    const { page, context } = await openApp();
++    await addSamples(page);
++    const [download] = await Promise.all([
++      page.waitForEvent("download"),
++      page.getByRole("button", { name: "Export CSV" }).click(),
++    ]);
++    assert.equal(download.suggestedFilename(), "my-movies.csv");
++    const text = require("node:fs").readFileSync(await download.path(), "utf8").replace(/^﻿/, "");
++    const lines = text.trim().split("\r\n");
++    assert.equal(lines.length, 16);
++    assert.match(lines[0], /^Title,Status,/);
++    assert.ok(text.includes(",watchlist,"));
++    assert.ok(text.includes(",watched,"));
++    await context.close();
++  });
++
+   test("edit tags, then delete with a confirmation", async () => {
+     const { page, context } = await openApp();
+     await addSamples(page);
