@@ -1,0 +1,133 @@
+diff --git a/src/core.js b/src/core.js
+index 8e739b8..5f644f8 100644
+--- a/src/core.js
++++ b/src/core.js
+@@ -261,6 +261,42 @@ export function movieBody(movie) {
+   return body;
+ }
+ 
++// ---------- CSV export ----------
++
++const CSV_COLUMNS = ["Title", "Status", "Loved", "Tags", "Year", "Runtime (minutes)", "Rating", "Director", "Stars", "Plot", "Added", "Watched"];
++
++// One CSV field. Quotes anything with a comma, quote or line break, and
++// prefixes a quote to text a spreadsheet would run as a formula.
++function csvField(value) {
++  let text = String(value ?? "");
++  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
++  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
++}
++
++const isoDate = (t) => (Number.isFinite(t) && t > 0 ? new Date(t).toISOString().slice(0, 10) : "");
++
++// Every movie, watched and watchlist, as CSV text (newest first, CRLF rows).
++export function moviesToCsv(movies) {
++  const rows = sortNewestFirst(movies).map((m) => {
++    const info = m.info?.found ? m.info : null;
++    return [
++      m.title,
++      m.status,
++      m.loved ? "yes" : "no",
++      m.tags.join("; "),
++      info?.year ?? "",
++      info?.runtimeMinutes ?? "",
++      info?.certificate ?? "",
++      info?.director.join("; ") ?? "",
++      info?.stars.join("; ") ?? "",
++      info?.plot ?? "",
++      isoDate(m.createdAt),
++      m.status === "watched" ? isoDate(m.watchedAt ?? m.createdAt) : "",
++    ];
++  });
++  return [CSV_COLUMNS, ...rows].map((r) => r.map(csvField).join(",")).join("\r\n") + "\r\n";
++}
++
+ // ---------- Reading a log ----------
+ 
+ export function sortNewestFirst(movies) {
+diff --git a/src/movies.jsx b/src/movies.jsx
+index 1520c64..38887b6 100644
+--- a/src/movies.jsx
++++ b/src/movies.jsx
+@@ -3,7 +3,7 @@
+ // tags, plot, director and stars. "More" opens IMDb.
+ import {
+   searchMovies, filterMovies, findByTitle, watchedWithCounts, infoLine, imdbUrl,
+-  formatDate, hasTag, cleanTitle, WARN_TAG,
++  formatDate, hasTag, cleanTitle, moviesToCsv, WARN_TAG,
+ } from "./core.js";
+ import { TagChoices } from "./tags.jsx";
+ 
+@@ -141,6 +141,17 @@ export function EditSheet({ movie, library, onSave, onDelete, onClose }) {
+   );
+ }
+ 
++function downloadCsv(movies) {
++  const url = URL.createObjectURL(new Blob(["﻿", moviesToCsv(movies)], { type: "text/csv;charset=utf-8" }));
++  const link = document.createElement("a");
++  link.href = url;
++  link.download = "my-movies.csv";
++  document.body.appendChild(link);
++  link.click();
++  link.remove();
++  URL.revokeObjectURL(url);
++}
++
+ export function MoviesView({ movies, loaded, library, nameOf, lookingUp, canLookUp, onLookUp, onEdit, onWatchedIt, onAddSamples, status }) {
+   const [tab, setTab] = useState("watched");
+   const [query, setQuery] = useState("");
+@@ -194,6 +205,11 @@ export function MoviesView({ movies, loaded, library, nameOf, lookingUp, canLook
+               onChange={(e) => setQuery(e.target.value)}
+             />
+           </div>
++          {movies.length > 0 && (
++            <button type="button" className="btn btn-secondary btn-compact" onClick={() => downloadCsv(movies)}>
++              Export CSV
++            </button>
++          )}
+         </header>
+ 
+         <div className="movies-controls">
+diff --git a/tests/core.test.js b/tests/core.test.js
+index 9011e5f..bffdb96 100644
+--- a/tests/core.test.js
++++ b/tests/core.test.js
+@@ -9,7 +9,7 @@ import {
+   createMovie, markWatched, readMovie, movieBody, findByTitle, searchMovies, filterMovies,
+   watchedWithCounts, recordWatched, connection, readLink, CLAUDE_ID, NIGHT_EXPIRES_MS,
+   readSide, emptySide, claudeSide, seededRandom, nightPool, sharedWatchlist, pickFrom, deriveNight,
+-  newSamples, SAMPLE_MOVIES,
++  newSamples, SAMPLE_MOVIES, moviesToCsv,
+ } from "../src/core.js";
+ 
+ let counter = 0;
+@@ -400,3 +400,29 @@ describe("Movie Night", () => {
+     assert.equal(shared.length, 1);
+   });
+ });
++
++describe("moviesToCsv", () => {
++  test("header only for no movies", () => {
++    const lines = moviesToCsv([]).split("\r\n");
++    assert.equal(lines[0], "Title,Status,Loved,Tags,Year,Runtime (minutes),Rating,Director,Stars,Plot,Added,Watched");
++    assert.equal(lines.length, 2);
++  });
++
++  test("includes watched and watchlist movies with their details", () => {
++    const info = readInfo({ year: 2010, runtimeMinutes: 148, certificate: "PG-13", plot: "Dreams, within dreams.", director: ["Christopher Nolan"], stars: ["A", "B"] });
++    const rows = moviesToCsv([
++      watched("Inception", ["Mind-bending", "Fun"], { loved: true, now: Date.UTC(2024, 0, 5), info }),
++      later("Dune", Date.UTC(2023, 5, 1)),
++    ]).trim().split("\r\n");
++    assert.equal(rows.length, 3);
++    assert.equal(rows[1], 'Inception,watched,yes,Mind-bending; Fun,2010,148,PG-13,Christopher Nolan,A; B,"Dreams, within dreams.",2024-01-05,2024-01-05');
++    assert.equal(rows[2], "Dune,watchlist,no,,,,,,,,2023-06-01,");
++  });
++
++  test("escapes quotes and neutralises spreadsheet formulas", () => {
++    const csv = moviesToCsv([watched('Say "Hi"', ["x"], { now: 2 }), watched("=SUM(A1)", ["x"], { now: 1 })]);
++    const rows = csv.trim().split("\r\n");
++    assert.ok(rows[1].startsWith('"Say ""Hi"""'));
++    assert.ok(rows[2].startsWith("'=SUM(A1),"));
++  });
++});

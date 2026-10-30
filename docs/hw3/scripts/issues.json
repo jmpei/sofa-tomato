@@ -1,0 +1,80 @@
+[
+  {
+    "title": "Run unit and browser tests in GitHub Actions on every push and PR",
+    "labels": ["chore", "priority: high"],
+    "milestone": "Sprint 1",
+    "body": "**Why:** AI-written PRs need a gate that does not depend on the agent saying \"tests pass\".\n\n### Acceptance criteria\n- [ ] `.github/workflows/test.yml` runs on `push` to `main` and on every `pull_request`\n- [ ] Installs with `npm ci`, installs Playwright Chromium, runs `npm test`\n- [ ] A failing test makes the check red and blocks merge (branch protection on `main`)\n- [ ] README shows the status badge\n"
+  },
+  {
+    "title": "Add AGENTS.md rules file linking the PRD, mockups and workflow",
+    "labels": ["docs", "priority: high"],
+    "milestone": "Sprint 1",
+    "body": "**Why:** give every AI agent the same project context: stack, architecture, PRD, mockups, Scrum workflow.\n\n### Acceptance criteria\n- [ ] `AGENTS.md` in the repo root covers project context, PRD & design references, Scrum & Git workflow, do's and don'ts\n- [ ] Links `docs/PRD.md` and describes every mockup in `docs/mockups/`\n- [ ] Tested on a real Sprint 1 issue with and without the file; results in `docs/hw3/`\n- [ ] Revised (v2) from what the test showed; changelog at the bottom\n"
+  },
+  {
+    "title": "Export my movies as a CSV file",
+    "labels": ["feature", "priority: high"],
+    "milestone": "Sprint 1",
+    "body": "**User story (US8):** As a viewer who has logged many movies, I want to download my movies as a CSV file, so that I keep a copy and can open it in a spreadsheet.\n\n### Acceptance criteria\n- [ ] Movies view has an **Export CSV** button styled like the other pill buttons (`.btn .btn-secondary .btn-compact`), in the controls row\n- [ ] The file is named `sofa-tomato-YYYY-MM-DD.csv` and holds all of my movies (watched and watchlist), newest first\n- [ ] Columns: `title, status, tags, loved, watched_at, watched_with, year`; tags joined with `; `; `watched_with` uses display names, not ids\n- [ ] Cells with commas, quotes or line breaks are quoted (RFC 4180); cells starting with `=`, `+`, `-` or `@` are prefixed with `'` (spreadsheet formula injection)\n- [ ] The status line says `Exported N movies.`; with no movies the button is disabled\n- [ ] Works in solo mode and shared mode, at 360 px and 1280 px, without page scroll\n- [ ] CSV building is a pure function in `core.js` with unit tests; an e2e test checks the download\n"
+  },
+  {
+    "title": "Sort Movies by newest, oldest or title A–Z",
+    "labels": ["feature", "priority: medium"],
+    "milestone": "Sprint 1",
+    "body": "**User story (US9):** As a viewer who half-remembers a movie, I want to sort my movies by date or title, so that I can find it by when I watched it.\n\n### Acceptance criteria\n- [ ] A sort select next to the filter offers Newest first (default), Oldest first, Title A–Z\n- [ ] Sorting works together with search and filter; search ranking still wins while a query is typed\n- [ ] Title sort ignores case, accents and a leading \"The\"\n- [ ] The choice survives a refresh on this device\n- [ ] Sorting is a pure function in `core.js` with unit tests; e2e covers each option\n"
+  },
+  {
+    "title": "Undo a delete for 5 seconds",
+    "labels": ["feature", "priority: medium"],
+    "milestone": "Sprint 1",
+    "body": "**User story (US10):** As a viewer who deleted a movie by mistake, I want to undo it right away, so that one mis-tap does not lose my tags.\n\n### Acceptance criteria\n- [ ] After Delete, the status line shows `Deleted <title>.` with an **Undo** button for 5 seconds\n- [ ] Undo restores the movie with the same id, tags, star, dates and `watchedWith`\n- [ ] Undo is keyboard-reachable and announced by the live region\n- [ ] e2e: delete → undo → refresh still shows the movie\n"
+  },
+  {
+    "title": "Explain why the slot machine spins again when the pick leaves the pool",
+    "labels": ["bug", "priority: medium"],
+    "milestone": "Sprint 1",
+    "body": "**Bug (evaluator round 2 #2):** during a vote, if the owner deletes or un-stars the picked movie, the reels spin again with no words, so the voter does not know why the movie changed.\n\n### Acceptance criteria\n- [ ] When the pick changes mid-vote, the status line says `<title> left the pool, so here’s another pick.`\n- [ ] The message appears on both pages\n- [ ] e2e reproduces it with two pages (owner deletes the picked movie)\n"
+  },
+  {
+    "title": "Start Movie Night even when the two devices' clocks differ",
+    "labels": ["bug", "priority: low"],
+    "milestone": "Sprint 2",
+    "body": "**Bug (evaluator round 2 #10):** when two devices' clocks differ by 30 minutes or more, each side sees the other's ready time as expired, and Movie Night never starts.\n\n### Acceptance criteria\n- [ ] Ready times are compared using the db's server timestamp (or the newer of the two sides) instead of each device's clock\n- [ ] Unit test: sides 45 min apart still start the night\n- [ ] No change for devices whose clocks agree (existing e2e stays green)\n"
+  },
+  {
+    "title": "Keyboard and screen-reader pass on all four views",
+    "labels": ["chore", "accessibility", "priority: medium"],
+    "milestone": "Sprint 1",
+    "body": "**Why:** the app is built by AI agents; accessibility must be checked by a tool, not by trust.\n\n### Acceptance criteria\n- [ ] Add `@axe-core/playwright` to dev dependencies; e2e runs axe on Home, Movies, Movie Night, People in light and dark\n- [ ] Zero serious or critical violations\n- [ ] Every flow can be finished with the keyboard only (Tab, Enter, Escape)\n- [ ] Focus is visible on every control in both themes\n"
+  },
+  {
+    "title": "Import movies from a Letterboxd CSV export",
+    "labels": ["feature", "priority: medium"],
+    "milestone": "Sprint 2",
+    "body": "**User story (US12):** As someone who already logs in Letterboxd, I want to import my diary, so that I can try Movie Night without retyping.\n\n### Acceptance criteria\n- [ ] Movies view has **Import CSV**; accepts Letterboxd `diary.csv` and `watchlist.csv`\n- [ ] Rows become watched or watchlist movies; a Letterboxd rating of 4.5–5 sets ★\n- [ ] Titles already in my log are skipped and counted: `Imported 40, skipped 3 already here.`\n- [ ] Bad rows are skipped, not fatal; titles and tags are clamped to the length limits\n- [ ] Parser is a pure function in `core.js` with unit tests (quotes, commas, BOM, CRLF)\n"
+  },
+  {
+    "title": "Log a rewatch without creating a duplicate row",
+    "labels": ["feature", "priority: medium"],
+    "milestone": "Sprint 2",
+    "body": "**User story (US13):** As a viewer who watched a movie again, I want to add a new date to the same entry, so that my log shows how often I rewatch it.\n\n### Acceptance criteria\n- [ ] Marking a title already watched offers **Watched again** instead of a second row\n- [ ] The entry keeps a list of watch dates; the row caption shows `Watched 3 times · last OCT 22`\n- [ ] Old entries without the list still read correctly (`readMovie` migration)\n- [ ] Unit tests for the reader migration; e2e for the flow\n"
+  },
+  {
+    "title": "Movie Night for three or more people",
+    "labels": ["feature", "priority: low"],
+    "milestone": "Sprint 2",
+    "body": "**User story (US14):** As a family choosing together, we want everyone in a group to vote, so that the pick suits all of us.\n\n### Acceptance criteria\n- [ ] Movie Night can start with a named group from People\n- [ ] The night starts when every member has pressed; the pool merges all members' watchlists\n- [ ] A pick needs a yes from everyone except the owner; any \"Not tonight\" spins again\n- [ ] Two-person nights behave exactly as before (existing e2e green)\n"
+  },
+  {
+    "title": "Show my most-used tags and movies watched per month",
+    "labels": ["feature", "priority: low"],
+    "milestone": "Sprint 2",
+    "body": "**User story (US15):** As a viewer asked \"what do you usually like?\", I want to see my top tags and how much I watch, so that I can answer in a second.\n\n### Acceptance criteria\n- [ ] A Stats panel in Movies shows the top 5 tags with counts and a 6-month bar list of movies watched\n- [ ] Bars are text + width, readable by screen readers, both themes\n- [ ] Fits on one screen at 360 px (the panel scrolls inside its box)\n- [ ] Counting is pure functions in `core.js` with unit tests\n"
+  },
+  {
+    "title": "Sprint 1 review: compare AI output with and without AGENTS.md",
+    "labels": ["docs", "priority: medium"],
+    "milestone": "Sprint 1",
+    "body": "**Why:** measure whether the rules file changes what the agent writes, then revise it.\n\n### Acceptance criteria\n- [ ] Same issue (#3), two clean Claude Code sessions, identical prompt, with and without `AGENTS.md`\n- [ ] Scored against a checklist written before the runs; results in `docs/hw3/comparison.md`\n- [ ] `AGENTS.md` v2 fixes what v1 missed; changelog lists each change and its evidence\n- [ ] Reflection in `docs/hw3/reflection.md`\n"
+  }
+]

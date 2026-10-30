@@ -1,0 +1,203 @@
+diff --git a/src/App.jsx b/src/App.jsx
+index 892933e..5ad3be8 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -4,7 +4,7 @@
+ import {
+   createMovie, markWatched, readMovie, movieBody, findByTitle, tagLibrary, recordWatched,
+   newSamples, infoPrompt, readInfo, connection, readLink, readSide, claudeSide, deriveNight,
+-  CLAUDE_ID, DEFAULT_RELATION,
++  CLAUDE_ID, DEFAULT_RELATION, moviesToCsv,
+ } from "./core.js";
+ import { connect, paths } from "./runtime.js";
+ import { GuessContext, makeGuesser } from "./complete.jsx";
+@@ -329,6 +329,18 @@ export default function App() {
+     flash(added.length === 0 ? "All sample movies are already here." : `Added ${added.length} sample movies.`);
+   };
+ 
++  // #3: a download is not a db write, so it needs no save(); the status line reports it.
++  const handleExport = () => {
++    const csv = `﻿${moviesToCsv(myMovies, nameOf)}`;
++    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
++    const link = document.createElement("a");
++    link.href = url;
++    link.download = "sofa-tomato-movies.csv";
++    link.click();
++    URL.revokeObjectURL(url);
++    flash(`Exported ${myMovies.length} ${myMovies.length === 1 ? "movie" : "movies"} to CSV.`);
++  };
++
+   const openEdit = (movie, opener) => {
+     editOpener.current = opener;
+     setEditing(movie);
+@@ -474,6 +486,7 @@ export default function App() {
+                 setView("home");
+               }}
+               onAddSamples={handleAddSamples}
++              onExport={handleExport}
+               status={status}
+             />
+           )}
+diff --git a/src/core.js b/src/core.js
+index 8e739b8..b18f11e 100644
+--- a/src/core.js
++++ b/src/core.js
+@@ -589,6 +589,47 @@ export function newSamples(movies, samples = SAMPLE_MOVIES, { now = Date.now(),
+   return added;
+ }
+ 
++// ---------- Export ----------
++
++export const CSV_COLUMNS = [
++  "Title", "Status", "Loved", "Tags", "Added", "Watched", "Watched with",
++  "Year", "Runtime (min)", "Rating", "Director", "Stars", "Plot",
++];
++
++// #3: one cell, quoted when needed. A leading = + - @ (or tab/CR) would run as a
++// formula in Excel or Sheets, and titles come from a shared db, so defuse it.
++export function csvCell(value) {
++  let text = value == null ? "" : String(value);
++  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
++  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
++}
++
++const isoDay = (timestamp) => (Number.isFinite(timestamp) ? new Date(timestamp).toISOString().slice(0, 10) : "");
++
++// #3: every movie, watched and watchlist, as CSV text (CRLF rows, header first).
++// Newest first, like the Movies page. nameOf turns a person's id into a name.
++export function moviesToCsv(movies, nameOf = (id) => id) {
++  const rows = sortNewestFirst(movies).map((m) => {
++    const info = m.info?.found ? m.info : null;
++    return [
++      m.title,
++      m.status,
++      m.loved ? "yes" : "no",
++      m.tags.join("; "),
++      isoDay(m.createdAt),
++      m.status === "watched" ? isoDay(m.watchedAt ?? m.createdAt) : "",
++      [...new Set(m.watchedWith.map((w) => nameOf(w.with)))].join("; "),
++      info?.year,
++      info?.runtimeMinutes,
++      info?.certificate,
++      info?.director.join("; "),
++      info?.stars.join("; "),
++      info?.plot,
++    ];
++  });
++  return [CSV_COLUMNS, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
++}
++
+ // ---------- Display ----------
+ 
+ export function formatDate(timestamp, now = Date.now(), locale) {
+diff --git a/src/movies.jsx b/src/movies.jsx
+index 1520c64..23d4302 100644
+--- a/src/movies.jsx
++++ b/src/movies.jsx
+@@ -141,7 +141,7 @@ export function EditSheet({ movie, library, onSave, onDelete, onClose }) {
+   );
+ }
+ 
+-export function MoviesView({ movies, loaded, library, nameOf, lookingUp, canLookUp, onLookUp, onEdit, onWatchedIt, onAddSamples, status }) {
++export function MoviesView({ movies, loaded, library, nameOf, lookingUp, canLookUp, onLookUp, onEdit, onWatchedIt, onAddSamples, onExport, status }) {
+   const [tab, setTab] = useState("watched");
+   const [query, setQuery] = useState("");
+   // "" (all), "loved", "tag:<label>" or "with:<id>"
+@@ -224,6 +224,11 @@ export function MoviesView({ movies, loaded, library, nameOf, lookingUp, canLook
+               </select>
+             </div>
+           )}
++          {movies.length > 0 && (
++            <button type="button" className="btn btn-secondary btn-compact" onClick={onExport}>
++              Export CSV
++            </button>
++          )}
+         </div>
+ 
+         <p className="search-answer" aria-live="polite">{answer || status}</p>
+diff --git a/tests/core.test.js b/tests/core.test.js
+index 9011e5f..8cff245 100644
+--- a/tests/core.test.js
++++ b/tests/core.test.js
+@@ -9,7 +9,7 @@ import {
+   createMovie, markWatched, readMovie, movieBody, findByTitle, searchMovies, filterMovies,
+   watchedWithCounts, recordWatched, connection, readLink, CLAUDE_ID, NIGHT_EXPIRES_MS,
+   readSide, emptySide, claudeSide, seededRandom, nightPool, sharedWatchlist, pickFrom, deriveNight,
+-  newSamples, SAMPLE_MOVIES,
++  newSamples, SAMPLE_MOVIES, csvCell, moviesToCsv, CSV_COLUMNS,
+ } from "../src/core.js";
+ 
+ let counter = 0;
+@@ -400,3 +400,42 @@ describe("Movie Night", () => {
+     assert.equal(shared.length, 1);
+   });
+ });
++
++describe("export to CSV", () => {
++  test("csvCell quotes commas, quotes and newlines, and defuses formulas", () => {
++    assert.equal(csvCell("plain"), "plain");
++    assert.equal(csvCell('Say "hi", ok'), '"Say ""hi"", ok"');
++    assert.equal(csvCell("two\nlines"), '"two\nlines"');
++    assert.equal(csvCell("=SUM(A1)"), "'=SUM(A1)");
++    assert.equal(csvCell(null), "");
++    assert.equal(csvCell(1999), "1999");
++  });
++
++  test("moviesToCsv with no movies is just the header", () => {
++    assert.equal(moviesToCsv([]), `${CSV_COLUMNS.join(",")}\r\n`);
++  });
++
++  test("moviesToCsv lists watched and watchlist movies, newest first", () => {
++    const a = watched("Arrival", ["Made me cry", "Slow, but good"], { now: Date.UTC(2026, 9, 1), loved: true });
++    const b = later('The "Room"', Date.UTC(2026, 9, 20));
++    const lines = moviesToCsv([a, b]).trimEnd().split("\r\n");
++    assert.equal(lines.length, 3);
++    assert.equal(lines[1], '"The ""Room""",watchlist,no,,2026-10-20,,,,,,,,');
++    assert.equal(lines[2], 'Arrival,watched,yes,"Made me cry; Slow, but good",2026-10-01,2026-10-01,,,,,,,');
++  });
++
++  test("moviesToCsv includes details and names who you watched with", () => {
++    const m = {
++      ...watched("Heat", ["Tense"], { now: Date.UTC(2026, 0, 5) }),
++      watchedWith: [{ with: "u_maya", at: 1 }, { with: "u_maya", at: 2 }],
++      info: readInfo({ year: 1995, runtimeMinutes: 170, certificate: "R", plot: "Cops, robbers.", director: ["Michael Mann"], stars: ["Al Pacino", "Robert De Niro"] }),
++    };
++    const row = moviesToCsv([m], (id) => (id === "u_maya" ? "Maya" : id)).split("\r\n")[1];
++    assert.equal(row, 'Heat,watched,no,Tense,2026-01-05,2026-01-05,Maya,1995,170,R,Michael Mann,Al Pacino; Robert De Niro,"Cops, robbers."');
++  });
++
++  test("moviesToCsv leaves detail columns empty when details are missing or not found", () => {
++    const m = { ...watched("Heat", ["Tense"]), info: { found: false } };
++    assert.match(moviesToCsv([m]), /,,,,,,\r\n$/);
++  });
++});
+diff --git a/tests/e2e.test.cjs b/tests/e2e.test.cjs
+index b830b5a..743e59d 100644
+--- a/tests/e2e.test.cjs
++++ b/tests/e2e.test.cjs
+@@ -353,6 +353,25 @@ describe("Movies", () => {
+     await context.close();
+   });
+ 
++  test("export every movie, watched and watchlist, as a CSV file", async () => {
++    const { page, context } = await openApp();
++    assert.equal(await page.getByRole("button", { name: "Export CSV" }).count(), 0);
++    await addSamples(page);
++    const [download] = await Promise.all([
++      page.waitForEvent("download"),
++      page.getByRole("button", { name: "Export CSV" }).click(),
++    ]);
++    assert.equal(download.suggestedFilename(), "sofa-tomato-movies.csv");
++    const text = fs.readFileSync(await download.path(), "utf8");
++    const lines = text.replace(/^﻿/, "").trimEnd().split("\r\n");
++    assert.match(lines[0], /^Title,Status,Loved,Tags/);
++    assert.ok(lines.some((l) => l.startsWith("Arrival,watched")));
++    assert.ok(lines.some((l) => l.includes(",watchlist,")));
++    await page.getByText(/^Exported \d+ movies to CSV\.$/).waitFor();
++    assert.ok(await fitsOneScreen(page));
++    await context.close();
++  });
++
+   test("edit tags, then delete with a confirmation", async () => {
+     const { page, context } = await openApp();
+     await addSamples(page);
